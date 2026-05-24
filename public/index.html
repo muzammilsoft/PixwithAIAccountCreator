@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pixwith Account Creator Bot</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h1 { color: #333; text-align: center; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: bold; }
+        input[type="text"], textarea { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
+        .controls { display: flex; gap: 10px; margin-top: 20px; }
+        button { flex: 1; padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; transition: background 0.3s; }
+        #startBtn { background-color: #28a745; color: white; }
+        #startBtn:hover { background-color: #218838; }
+        #stopBtn { background-color: #dc3545; color: white; }
+        #stopBtn:hover { background-color: #c82333; }
+        #stopBtn:disabled { background-color: #eea2ad; cursor: not-allowed; }
+        #console { background-color: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 6px; height: 400px; overflow-y: auto; font-family: 'Consolas', 'Courier New', monospace; font-size: 14px; line-height: 1.5; margin-top: 20px; }
+        .log-blue { color: #4fc1ff; }
+        .log-green { color: #b5cea8; }
+        .log-red { color: #f44747; }
+        .log-yellow { color: #dcdcaa; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Pixwith.ai Account Creator</h1>
+
+        <div class="form-group">
+            <label for="referralLink">رابط الإحالة (Referral Link):</label>
+            <input type="text" id="referralLink" placeholder="https://pixwith.video-generator.ai/?ref=..." value="https://pixwith.video-generator.ai/?ref=1fYQHG">
+        </div>
+
+        <div class="form-group">
+            <label for="proxies">قائمة البروكسيات (اختياري - سطر لكل بروكسي):</label>
+            <textarea id="proxies" rows="4" placeholder="host:port:user:pass"></textarea>
+        </div>
+
+        <div class="controls">
+            <button id="startBtn">بدء التشغيل</button>
+            <button id="stopBtn" disabled>إيقاف</button>
+        </div>
+
+        <div id="console"></div>
+    </div>
+
+    <script>
+        const socket = io();
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const consoleDiv = document.getElementById('console');
+        const referralInput = document.getElementById('referralLink');
+        const proxiesInput = document.getElementById('proxies');
+
+        socket.on('log', (data) => {
+            const logElement = document.createElement('div');
+            logElement.className = `log-${data.level}`;
+            logElement.textContent = data.message;
+            consoleDiv.appendChild(logElement);
+            consoleDiv.scrollTop = consoleDiv.scrollHeight;
+        });
+
+        socket.on('status', (data) => {
+            if (data.running) {
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+            } else {
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+            }
+        });
+
+        startBtn.onclick = () => {
+            const referralLink = referralInput.value.trim();
+            const proxies = proxiesInput.value.split('\n').filter(p => p.trim() !== '');
+
+            if (!referralLink) {
+                alert('الرجاء إدخال رابط الإحالة');
+                return;
+            }
+
+            socket.emit('start', { referralLink, proxies });
+        };
+
+        stopBtn.onclick = () => {
+            socket.emit('stop');
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+node_modules
+dist
+data/accounts.json
+data/logs.log
+.env

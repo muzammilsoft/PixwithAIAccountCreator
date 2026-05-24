@@ -1,0 +1,28 @@
+{
+  "name": "pixwith-account-creator",
+  "version": "1.0.0",
+  "description": "Automated account creator for Pixwith.ai",
+  "main": "dist/server/index.js",
+  "scripts": {
+    "start": "node dist/server/index.js",
+    "dev": "nodemon --watch 'src/**/*.ts' --exec 'ts-node' src/server/index.ts",
+    "build": "tsc",
+    "postinstall": "npx playwright install chromium"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "playwright": "^1.40.0",
+    "socket.io": "^4.7.2"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.10.0",
+    "@types/socket.io": "^3.0.2",
+    "nodemon": "^3.0.2",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.3.2"
+  }
+}
