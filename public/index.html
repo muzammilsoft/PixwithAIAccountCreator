@@ -56,12 +56,24 @@
         const referralInput = document.getElementById('referralLink');
         const proxiesInput = document.getElementById('proxies');
 
+        socket.on('connect', () => {
+            const logElement = document.createElement('div');
+            logElement.className = 'log-green';
+            logElement.textContent = `[${new Date().toLocaleString()}] متصل بسيرفر التحكم.`;
+            consoleDiv.appendChild(logElement);
+        });
+
         socket.on('log', (data) => {
             const logElement = document.createElement('div');
             logElement.className = `log-${data.level}`;
             logElement.textContent = data.message;
             consoleDiv.appendChild(logElement);
             consoleDiv.scrollTop = consoleDiv.scrollHeight;
+
+            // Limit log entries to 1000 to keep UI responsive
+            if (consoleDiv.childNodes.length > 1000) {
+                consoleDiv.removeChild(consoleDiv.firstChild);
+            }
         });
 
         socket.on('status', (data) => {
