@@ -42,8 +42,12 @@ export class PixwithAutomation {
             logger.log(`✅ المتصفح جاهز للعمل.`, LogLevel.SUCCESS);
 
             // 3. Go to Referral Link
-            logger.log(`[3/8] التوجه إلى رابط الإحالة: ${referralLink}`, LogLevel.INFO);
-            await page.goto(referralLink, { waitUntil: 'networkidle', timeout: 60000 });
+            let targetUrl = referralLink.trim();
+            if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+                targetUrl = 'https://' + targetUrl;
+            }
+            logger.log(`[3/8] التوجه إلى رابط الإحالة: ${targetUrl}`, LogLevel.INFO);
+            await page.goto(targetUrl, { waitUntil: 'networkidle', timeout: 60000 });
             logger.log(`✅ تم تحميل الصفحة بنجاح.`, LogLevel.SUCCESS);
 
             // 4. Click Sign In
@@ -111,6 +115,9 @@ export class PixwithAutomation {
             return true;
         } catch (error: any) {
             logger.log(`❌ فشل في خطوة ما: ${error.message}`, LogLevel.ERROR);
+            if (error.message.includes('executable')) {
+                logger.log(`نصيحة: يبدو أن المتصفح غير مثبت أو غير مدعوم في هذه البيئة.`, LogLevel.WARNING);
+            }
             return false;
         } finally {
             if (browser) {

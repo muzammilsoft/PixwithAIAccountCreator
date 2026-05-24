@@ -39,6 +39,10 @@ io.on('connection', (socket) => {
             isRunning = true;
             io.emit('status', { running: true });
 
+            if (process.env.VERCEL) {
+                logger.log('⚠️ تنبيه: تم اكتشاف بيئة Vercel. يرجى العلم أن Vercel لا يدعم تشغيل Playwright والعمليات الطويلة بشكل جيد. يفضل تشغيل البوت محلياً.', LogLevel.WARNING);
+            }
+
             const { referralLink, proxies } = data;
             const proxyManager = new ProxyManager(proxies);
 

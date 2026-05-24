@@ -59,7 +59,14 @@
         socket.on('connect', () => {
             const logElement = document.createElement('div');
             logElement.className = 'log-green';
-            logElement.textContent = `[${new Date().toLocaleString()}] متصل بسيرفر التحكم.`;
+            logElement.textContent = `[${new Date().toLocaleString()}] تم إنشاء اتصال WebSocket بنجاح.`;
+            consoleDiv.appendChild(logElement);
+        });
+
+        socket.on('disconnect', () => {
+            const logElement = document.createElement('div');
+            logElement.className = 'log-red';
+            logElement.textContent = `[${new Date().toLocaleString()}] انقطع الاتصال بالسيرفر. جاري المحاولة مرة أخرى...`;
             consoleDiv.appendChild(logElement);
         });
 
