@@ -1,0 +1,58 @@
+name: Pixwith Account Creator Bot
+
+on:
+  workflow_dispatch:
+    inputs:
+      referral_link:
+        description: 'Referral Link'
+        required: true
+        default: 'https://pixwith.ai/ref/default'
+      account_count:
+        description: 'Number of accounts to create'
+        required: true
+        default: '10'
+
+jobs:
+  build-and-run:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Google Chrome
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+
+      - name: Build project
+        run: npm run build
+
+      - name: Run Bot
+        run: npm run bot -- --referral "${{ github.event.inputs.referral_link }}" --count ${{ github.event.inputs.account_count }}
+
+      - name: Save Accounts Data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: created-accounts
+          path: data/accounts.json
+
+      - name: Commit and Push Changes
+        if: always()
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add data/accounts.json || true
+          git commit -m "Update accounts list [skip ci]" || true
+          git push || true
