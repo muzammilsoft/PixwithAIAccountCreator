@@ -6,7 +6,7 @@ on:
       referral_link:
         description: 'Referral Link'
         required: true
-        default: 'https://pixwith.ai/ref/default'
+        default: 'https://pixwith.video-generator.ai/?ref=1fYQHG'
       account_count:
         description: 'Number of accounts to create'
         required: true
