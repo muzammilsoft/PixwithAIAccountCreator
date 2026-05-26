@@ -5,10 +5,15 @@ export interface MailAccount {
     token: string;
 }
 
-export class MailService {
+export interface IMailService {
+    generateEmail(): Promise<string | MailAccount>;
+    getVerificationCode(identifier: any): Promise<string | null>;
+}
+
+export class MailTmService implements IMailService {
     private readonly baseUrl = 'https://api.mail.tm';
 
-    async createAccount(): Promise<MailAccount> {
+    async generateEmail(): Promise<MailAccount> {
         const domainResponse = await axios.get(`${this.baseUrl}/domains`);
         const domain = domainResponse.data['hydra:member'][0].domain;
         const randomStr = Math.random().toString(36).substring(2, 10);
@@ -32,22 +37,25 @@ export class MailService {
     }
 
     async getVerificationCode(token: string): Promise<string | null> {
-        const messagesResponse = await axios.get(`${this.baseUrl}/messages`, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
+        try {
+            const messagesResponse = await axios.get(`${this.baseUrl}/messages`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
 
-        const messages = messagesResponse.data['hydra:member'];
-        if (messages.length === 0) return null;
+            const messages = messagesResponse.data['hydra:member'];
+            if (messages.length === 0) return null;
 
-        const messageId = messages[0].id;
-        const messageDetail = await axios.get(`${this.baseUrl}/messages/${messageId}`, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
+            const messageId = messages[0].id;
+            const messageDetail = await axios.get(`${this.baseUrl}/messages/${messageId}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
 
-        const body = messageDetail.data.text || messageDetail.data.intro || '';
-        // Regex to find 6-digit alphanumeric uppercase code (e.g., QAFZK9)
-        const codeMatch = body.match(/[A-Z0-9]{6}/);
+            const body = messageDetail.data.text || messageDetail.data.intro || messageDetail.data.html[0] || '';
+            const codeMatch = body.match(/[A-Z0-9]{6}/);
 
-        return codeMatch ? codeMatch[0] : null;
+            return codeMatch ? codeMatch[0] : null;
+        } catch (e) {
+            return null;
+        }
     }
 }

@@ -35,6 +35,15 @@ export class AppLogger {
         }
         fs.appendFileSync(this.logFilePath, logEntry + '\n');
     }
+
+    sendScreenshot(base64Data: string, publicUrl?: string) {
+        if (this.io) {
+            this.io.emit('screenshot', { data: base64Data, publicUrl });
+        }
+        if (publicUrl) {
+            this.log(`📸 Screenshot available at: ${publicUrl}`, LogLevel.INFO);
+        }
+    }
 }
 
 export const logger = new AppLogger();

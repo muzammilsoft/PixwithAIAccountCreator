@@ -6,46 +6,73 @@
     <title>Pixwith Account Creator Bot</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; }
-        .container { max-width: 800px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        h1 { color: #333; text-align: center; }
-        .form-group { margin-bottom: 20px; }
-        label { display: block; margin-bottom: 8px; font-weight: bold; }
-        input[type="text"], textarea { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
-        .controls { display: flex; gap: 10px; margin-top: 20px; }
-        button { flex: 1; padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; transition: background 0.3s; }
-        #startBtn { background-color: #28a745; color: white; }
-        #startBtn:hover { background-color: #218838; }
-        #stopBtn { background-color: #dc3545; color: white; }
-        #stopBtn:hover { background-color: #c82333; }
-        #stopBtn:disabled { background-color: #eea2ad; cursor: not-allowed; }
-        #console { background-color: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 6px; height: 400px; overflow-y: auto; font-family: 'Consolas', 'Courier New', monospace; font-size: 14px; line-height: 1.5; margin-top: 20px; }
-        .log-blue { color: #4fc1ff; }
-        .log-green { color: #b5cea8; }
-        .log-red { color: #f44747; }
-        .log-yellow { color: #dcdcaa; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; margin: 0; padding: 15px; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        .main-grid { display: grid; grid-template-columns: 350px 1fr; gap: 15px; flex: 1; min-height: 0; }
+        .sidebar, .main-content { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); overflow-y: auto; display: flex; flex-direction: column; }
+        h1, h2 { color: #1c1e21; margin-top: 0; font-size: 1.2rem; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9rem; }
+        input[type="text"], textarea, select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 0.9rem; }
+        .checkbox-group { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; }
+        .controls { display: flex; gap: 10px; margin-top: 10px; }
+        button { flex: 1; padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-size: 1rem; font-weight: bold; transition: all 0.2s; }
+        #startBtn { background-color: #0084ff; color: white; }
+        #startBtn:hover { background-color: #0073e6; }
+        #stopBtn { background-color: #f02849; color: white; }
+        #stopBtn:hover { background-color: #d62241; }
+        #stopBtn:disabled { background-color: #f9a9b6; cursor: not-allowed; }
+        #console { background-color: #1c1e21; color: #e4e6eb; padding: 15px; border-radius: 8px; flex: 1; overflow-y: auto; font-family: 'Consolas', monospace; font-size: 13px; line-height: 1.4; margin-top: 15px; }
+        .log-blue { color: #45bdff; }
+        .log-green { color: #45bd62; }
+        .log-red { color: #f35369; }
+        .log-yellow { color: #f7b928; }
+        #screenshot-container { margin-top: 15px; border: 1px solid #ddd; border-radius: 8px; padding: 5px; background: #fafafa; display: flex; flex-direction: column; align-items: center; }
+        #screenshot-img { max-width: 100%; border-radius: 4px; display: none; cursor: pointer; }
+        .screenshot-placeholder { color: #999; padding: 40px 10px; text-align: center; font-style: italic; }
+        #public-link { margin-top: 5px; font-size: 0.8rem; color: #0084ff; word-break: break-all; text-decoration: none; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Pixwith.ai Account Creator</h1>
+    <div class="main-grid">
+        <div class="sidebar">
+            <h1>إعدادات البوت</h1>
 
-        <div class="form-group">
-            <label for="referralLink">رابط الإحالة (Referral Link):</label>
-            <input type="text" id="referralLink" placeholder="https://pixwith.video-generator.ai/?ref=..." value="https://pixwith.video-generator.ai/?ref=1fYQHG">
+            <div class="form-group">
+                <label for="referralLink">رابط الإحالة:</label>
+                <input type="text" id="referralLink" placeholder="https://..." value="https://pixwith.video-generator.ai/?ref=1fYQHG">
+            </div>
+
+            <div class="form-group">
+                <label for="captchaKey">مفتاح 2Captcha (اختياري):</label>
+                <input type="text" id="captchaKey" placeholder="API Key">
+            </div>
+
+            <div class="form-group checkbox-group">
+                <input type="checkbox" id="useYopmail">
+                <label for="useYopmail">استخدام Yopmail (يتطلب كابتشا)</label>
+            </div>
+
+            <div class="form-group">
+                <label for="proxies">البروكسيات (host:port:user:pass):</label>
+                <textarea id="proxies" rows="5" placeholder="واحد في كل سطر"></textarea>
+            </div>
+
+            <div class="controls">
+                <button id="startBtn">بدء</button>
+                <button id="stopBtn" disabled>إيقاف</button>
+            </div>
+
+            <div id="screenshot-container">
+                <div class="screenshot-placeholder" id="placeholder">بانتظار أول لقطة شاشة...</div>
+                <img id="screenshot-img" alt="Live Browser View">
+                <a id="public-link" target="_blank" href="#"></a>
+            </div>
         </div>
 
-        <div class="form-group">
-            <label for="proxies">قائمة البروكسيات (اختياري - سطر لكل بروكسي):</label>
-            <textarea id="proxies" rows="4" placeholder="host:port:user:pass"></textarea>
+        <div class="main-content">
+            <h2>سجل العمليات (Live Logs)</h2>
+            <div id="console"></div>
         </div>
-
-        <div class="controls">
-            <button id="startBtn">بدء التشغيل</button>
-            <button id="stopBtn" disabled>إيقاف</button>
-        </div>
-
-        <div id="console"></div>
     </div>
 
     <script>
@@ -54,60 +81,52 @@
         const stopBtn = document.getElementById('stopBtn');
         const consoleDiv = document.getElementById('console');
         const referralInput = document.getElementById('referralLink');
+        const captchaInput = document.getElementById('captchaKey');
+        const useYopmailInput = document.getElementById('useYopmail');
         const proxiesInput = document.getElementById('proxies');
-
-        socket.on('connect', () => {
-            const logElement = document.createElement('div');
-            logElement.className = 'log-green';
-            logElement.textContent = `[${new Date().toLocaleString()}] تم إنشاء اتصال WebSocket بنجاح.`;
-            consoleDiv.appendChild(logElement);
-        });
-
-        socket.on('disconnect', () => {
-            const logElement = document.createElement('div');
-            logElement.className = 'log-red';
-            logElement.textContent = `[${new Date().toLocaleString()}] انقطع الاتصال بالسيرفر. جاري المحاولة مرة أخرى...`;
-            consoleDiv.appendChild(logElement);
-        });
+        const screenshotImg = document.getElementById('screenshot-img');
+        const placeholder = document.getElementById('placeholder');
+        const publicLink = document.getElementById('public-link');
 
         socket.on('log', (data) => {
-            const logElement = document.createElement('div');
-            logElement.className = `log-${data.level}`;
-            logElement.textContent = data.message;
-            consoleDiv.appendChild(logElement);
+            const entry = document.createElement('div');
+            entry.className = `log-${data.level}`;
+            entry.textContent = data.message;
+            consoleDiv.appendChild(entry);
             consoleDiv.scrollTop = consoleDiv.scrollHeight;
-
-            // Limit log entries to 1000 to keep UI responsive
-            if (consoleDiv.childNodes.length > 1000) {
-                consoleDiv.removeChild(consoleDiv.firstChild);
-            }
         });
 
         socket.on('status', (data) => {
-            if (data.running) {
-                startBtn.disabled = true;
-                stopBtn.disabled = false;
-            } else {
-                startBtn.disabled = false;
-                stopBtn.disabled = true;
+            startBtn.disabled = data.running;
+            stopBtn.disabled = !data.running;
+        });
+
+        socket.on('screenshot', (data) => {
+            placeholder.style.display = 'none';
+            screenshotImg.style.display = 'block';
+            screenshotImg.src = `data:image/png;base64,${data.data}`;
+            if (data.publicUrl) {
+                publicLink.textContent = "رابط عالمي للصورة: " + data.publicUrl;
+                publicLink.href = data.publicUrl;
+                publicLink.style.display = 'block';
             }
         });
 
+        screenshotImg.onclick = () => {
+            const win = window.open();
+            win.document.write('<img src="' + screenshotImg.src + '" style="max-width:100%">');
+        };
+
         startBtn.onclick = () => {
-            const referralLink = referralInput.value.trim();
-            const proxies = proxiesInput.value.split('\n').filter(p => p.trim() !== '');
-
-            if (!referralLink) {
-                alert('الرجاء إدخال رابط الإحالة');
-                return;
-            }
-
-            socket.emit('start', { referralLink, proxies });
+            socket.emit('start', {
+                referralLink: referralInput.value,
+                captchaKey: captchaInput.value,
+                useYopmail: useYopmailInput.checked,
+                proxies: proxiesInput.value.split('\n').filter(p => p.trim())
+            });
         };
 
-        stopBtn.onclick = () => {
-            socket.emit('stop');
-        };
+        stopBtn.onclick = () => socket.emit('stop');
     </script>
 </body>
 </html>

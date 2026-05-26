@@ -10,7 +10,11 @@ on:
       account_count:
         description: 'Number of accounts to create'
         required: true
-        default: '10'
+        default: '5'
+      use_yopmail:
+        description: 'Use Yopmail (requires 2CAPTCHA_KEY secret)'
+        type: boolean
+        default: false
 
 jobs:
   build-and-run:
@@ -39,7 +43,14 @@ jobs:
         run: npm run build
 
       - name: Run Bot
-        run: npm run bot -- --referral "${{ github.event.inputs.referral_link }}" --count ${{ github.event.inputs.account_count }}
+        env:
+          CAPTCHA_KEY: ${{ secrets.CAPTCHA_KEY }}
+        run: |
+          YOPMAIL_FLAG=""
+          if [ "${{ github.event.inputs.use_yopmail }}" = "true" ]; then
+            YOPMAIL_FLAG="--yopmail"
+          fi
+          npm run bot -- --referral "${{ github.event.inputs.referral_link }}" --count ${{ github.event.inputs.account_count }} --captcha "$CAPTCHA_KEY" $YOPMAIL_FLAG
 
       - name: Save Accounts Data
         if: always()
