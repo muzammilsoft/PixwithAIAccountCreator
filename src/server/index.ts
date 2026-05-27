@@ -3,7 +3,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import path from 'path';
 import { logger, LogLevel } from '../utils/AppLogger';
-import { PixwithAutomation } from '../automation/PixwithAutomation';
+import { PixwithAutomation, MailProvider } from '../automation/PixwithAutomation';
 import { ProxyManager } from '../utils/ProxyManager';
 
 const app = express();
@@ -17,13 +17,6 @@ logger.setIo(io);
 let isRunning = false;
 
 io.on('connection', (socket) => {
-    console.log(`[Socket] New connection: ${socket.id}`);
-
-    socket.emit('log', {
-        message: `[${new Date().toLocaleString()}] تم الاتصال بنجاح.`,
-        level: LogLevel.SUCCESS
-    });
-
     socket.emit('status', { running: isRunning });
 
     socket.on('start', async (data) => {
@@ -33,15 +26,15 @@ io.on('connection', (socket) => {
             isRunning = true;
             io.emit('status', { running: true });
 
-            const { referralLink, proxies, captchaKey, useYopmail } = data;
+            const { referralLink, proxies, captchaKey, mailProvider } = data;
             const proxyManager = new ProxyManager(proxies);
             const automation = new PixwithAutomation(captchaKey);
 
-            logger.log(`تم استلام طلب البدء. استخدام Yopmail: ${useYopmail ? 'نعم' : 'لا'}`, LogLevel.INFO);
+            logger.log(`تم استلام طلب البدء. مزود البريد: ${mailProvider}`, LogLevel.INFO);
 
             while (isRunning) {
                 const proxy = proxyManager.getNextProxy();
-                const success = await automation.createAccount(referralLink, proxy, useYopmail);
+                const success = await automation.createAccount(referralLink, proxy, mailProvider as MailProvider);
 
                 if (!isRunning) break;
 

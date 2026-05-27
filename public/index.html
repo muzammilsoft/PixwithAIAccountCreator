@@ -13,7 +13,6 @@
         .form-group { margin-bottom: 15px; }
         label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9rem; }
         input[type="text"], textarea, select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 0.9rem; }
-        .checkbox-group { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; }
         .controls { display: flex; gap: 10px; margin-top: 10px; }
         button { flex: 1; padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-size: 1rem; font-weight: bold; transition: all 0.2s; }
         #startBtn { background-color: #0084ff; color: white; }
@@ -47,9 +46,13 @@
                 <input type="text" id="captchaKey" placeholder="API Key">
             </div>
 
-            <div class="form-group checkbox-group">
-                <input type="checkbox" id="useYopmail">
-                <label for="useYopmail">استخدام Yopmail (يتطلب كابتشا)</label>
+            <div class="form-group">
+                <label for="mailProvider">مزود البريد:</label>
+                <select id="mailProvider">
+                    <option value="onesecmail">1SecMail (سريع - بدون كابتشا)</option>
+                    <option value="mailtm">Mail.tm (قد يكون محظوراً)</option>
+                    <option value="yopmail">Yopmail (يتطلب كابتشا)</option>
+                </select>
             </div>
 
             <div class="form-group">
@@ -82,7 +85,7 @@
         const consoleDiv = document.getElementById('console');
         const referralInput = document.getElementById('referralLink');
         const captchaInput = document.getElementById('captchaKey');
-        const useYopmailInput = document.getElementById('useYopmail');
+        const mailProviderInput = document.getElementById('mailProvider');
         const proxiesInput = document.getElementById('proxies');
         const screenshotImg = document.getElementById('screenshot-img');
         const placeholder = document.getElementById('placeholder');
@@ -106,7 +109,7 @@
             screenshotImg.style.display = 'block';
             screenshotImg.src = `data:image/png;base64,${data.data}`;
             if (data.publicUrl) {
-                publicLink.textContent = "رابط عالمي للصورة: " + data.publicUrl;
+                publicLink.textContent = "رابط الصورة العالمي: " + data.publicUrl;
                 publicLink.href = data.publicUrl;
                 publicLink.style.display = 'block';
             }
@@ -121,7 +124,7 @@
             socket.emit('start', {
                 referralLink: referralInput.value,
                 captchaKey: captchaInput.value,
-                useYopmail: useYopmailInput.checked,
+                mailProvider: mailProviderInput.value,
                 proxies: proxiesInput.value.split('\n').filter(p => p.trim())
             });
         };

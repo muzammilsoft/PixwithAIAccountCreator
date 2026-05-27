@@ -1,6 +1,7 @@
 import puppeteer, { Browser, Page } from 'puppeteer-core';
 import { MailTmService, MailAccount } from '../services/MailService';
 import { YopmailService } from '../services/YopmailService';
+import { OneSecMailService } from '../services/OneSecMailService';
 import { ProxyConfig } from '../utils/ProxyManager';
 import { logger, LogLevel } from '../utils/AppLogger';
 import { CaptchaService } from '../services/CaptchaService';
@@ -9,9 +10,16 @@ import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 
+export enum MailProvider {
+    MAIL_TM = 'mailtm',
+    YOPMAIL = 'yopmail',
+    ONESECMAIL = 'onesecmail'
+}
+
 export class PixwithAutomation {
     private mailTmService: MailTmService;
     private yopmailService: YopmailService;
+    private oneSecMailService: OneSecMailService;
     private captchaService?: CaptchaService;
     private accountsPath = path.join(process.cwd(), 'data', 'accounts.json');
 
@@ -21,6 +29,7 @@ export class PixwithAutomation {
         }
         this.mailTmService = new MailTmService();
         this.yopmailService = new YopmailService(this.captchaService);
+        this.oneSecMailService = new OneSecMailService();
     }
 
     private findChromePath(): string {
@@ -62,18 +71,24 @@ export class PixwithAutomation {
         throw new Error('لم يتم العثور على مسار متصفح Chrome. يرجى تثبيته أولاً.');
     }
 
-    private async takeAndEmitScreenshot(page: Page) {
+    private async takeAndEmitScreenshot(page: Page, label: string = 'Screenshot') {
         try {
+            logger.log(`📸 جاري محاولة التقاط لقطة شاشة: ${label}`, LogLevel.INFO);
             const buffer = await page.screenshot({ fullPage: true }) as Buffer;
             const base64 = buffer.toString('base64');
             const publicUrl = await uploadScreenshot(buffer);
             logger.sendScreenshot(base64, publicUrl || undefined);
-        } catch (e) {
-            console.error('Failed to capture screenshot', e);
+            if (publicUrl) {
+                logger.log(`✅ تم رفع اللقطة بنجاح: ${publicUrl}`, LogLevel.SUCCESS);
+            } else {
+                logger.log(`⚠️ فشل رفع اللقطة للسيرفر العالمي، لكنها تظهر في الواجهة المحلية.`, LogLevel.WARNING);
+            }
+        } catch (e: any) {
+            logger.log(`❌ فشل التقاط لقطة شاشة: ${e.message}`, LogLevel.ERROR);
         }
     }
 
-    async createAccount(referralLink: string, proxy?: ProxyConfig, useYopmail: boolean = false): Promise<boolean> {
+    async createAccount(referralLink: string, proxy?: ProxyConfig, provider: MailProvider = MailProvider.MAIL_TM): Promise<boolean> {
         let browser: Browser | null = null;
         try {
             logger.log(`--- بدء دورة عمل جديدة (Puppeteer) ---`, LogLevel.INFO);
@@ -81,9 +96,12 @@ export class PixwithAutomation {
             let email: string;
             let mailTmAcc: MailAccount | null = null;
 
-            if (useYopmail) {
+            if (provider === MailProvider.YOPMAIL) {
                 logger.log(`[1/8] توليد بريد Yopmail...`, LogLevel.INFO);
                 email = await this.yopmailService.generateEmail();
+            } else if (provider === MailProvider.ONESECMAIL) {
+                logger.log(`[1/8] توليد بريد 1secMail...`, LogLevel.INFO);
+                email = await this.oneSecMailService.generateEmail();
             } else {
                 logger.log(`[1/8] جاري طلب بريد مؤقت من Mail.tm...`, LogLevel.INFO);
                 mailTmAcc = await this.mailTmService.generateEmail();
@@ -114,17 +132,23 @@ export class PixwithAutomation {
 
             logger.log(`[3/8] التوجه إلى: ${targetUrl}`, LogLevel.INFO);
             await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 60000 });
-            await this.takeAndEmitScreenshot(page);
+
+            // Check for Cloudflare/Captcha
+            const content = await page.content();
+            if (content.includes('cf-challenge') || content.includes('ray-id')) {
+                logger.log('⚠️ تم اكتشاف Cloudflare Challenge، قد تفشل العملية.', LogLevel.WARNING);
+            }
+
+            await this.takeAndEmitScreenshot(page, 'Landing Page');
 
             // Click Sign In
             logger.log(`[4/8] محاولة التسجيل...`, LogLevel.INFO);
             const clicked = await page.evaluate(() => {
                 const buttons = Array.from(document.querySelectorAll('button, a'));
-                const target = buttons.find(b =>
-                    b.textContent?.toLowerCase().includes('sign in') ||
-                    b.textContent?.toLowerCase().includes('start for free') ||
-                    b.textContent?.includes('ابدأ')
-                ) as HTMLElement;
+                const target = buttons.find(b => {
+                    const txt = b.textContent?.toLowerCase() || '';
+                    return txt.includes('sign in') || txt.includes('start for free') || txt.includes('ابدأ') || txt.includes('سجل');
+                }) as HTMLElement;
                 if (target) {
                     target.click();
                     return true;
@@ -133,41 +157,52 @@ export class PixwithAutomation {
             });
 
             if (!clicked) {
-                // Try direct go to register if button not found
+                logger.log('⚠️ لم يتم العثور على زر التسجيل، محاولة الانتقال المباشر...', LogLevel.WARNING);
                 await page.goto('https://pixwith.ai/signup', { waitUntil: 'networkidle2' });
             }
 
             await new Promise(resolve => setTimeout(resolve, 5000));
-            await this.takeAndEmitScreenshot(page);
+            await this.takeAndEmitScreenshot(page, 'Sign Up Page');
 
             // Enter Email
             logger.log(`[5/8] إدخال البريد: ${email}`, LogLevel.INFO);
             await page.waitForSelector('input[type="email"]', { timeout: 15000 });
             await page.type('input[type="email"]', email, { delay: 100 });
 
-            await this.takeAndEmitScreenshot(page);
+            await this.takeAndEmitScreenshot(page, 'Email Entered');
 
             logger.log(`طلب رمز التحقق...`, LogLevel.INFO);
-            await page.evaluate(() => {
+            const sendBtnClicked = await page.evaluate(() => {
                 const buttons = Array.from(document.querySelectorAll('button'));
-                const sendBtn = buttons.find(b =>
-                    b.textContent?.includes('Send') ||
-                    b.textContent?.includes('Verification Code') ||
-                    b.textContent?.includes('رمز')
-                ) as HTMLElement;
-                if (sendBtn) sendBtn.click();
+                const sendBtn = buttons.find(b => {
+                    const txt = b.textContent || '';
+                    return txt.includes('Send') || txt.includes('Verification Code') || txt.includes('رمز') || txt.includes('إرسال');
+                }) as HTMLElement;
+                if (sendBtn) {
+                    sendBtn.click();
+                    return true;
+                }
+                return false;
             });
 
+            if (!sendBtnClicked) {
+                logger.log('❌ فشل الضغط على زر إرسال الرمز.', LogLevel.ERROR);
+            } else {
+                logger.log('✅ تم الضغط على زر إرسال الرمز.', LogLevel.SUCCESS);
+            }
+
             await new Promise(resolve => setTimeout(resolve, 5000));
-            await this.takeAndEmitScreenshot(page);
+            await this.takeAndEmitScreenshot(page, 'After Code Request');
 
             // Polling Code
             logger.log(`[6/8] انتظار الكود...`, LogLevel.INFO);
             let code: string | null = null;
-            for (let i = 1; i <= 20; i++) {
-                logger.log(`فحص البريد محاولة ${i}/20`, LogLevel.INFO);
-                if (useYopmail) {
+            for (let i = 1; i <= 30; i++) {
+                logger.log(`فحص البريد محاولة ${i}/30`, LogLevel.INFO);
+                if (provider === MailProvider.YOPMAIL) {
                     code = await this.yopmailService.getVerificationCode(browser, email);
+                } else if (provider === MailProvider.ONESECMAIL) {
+                    code = await this.oneSecMailService.getVerificationCode(email);
                 } else if (mailTmAcc) {
                     code = await this.mailTmService.getVerificationCode(mailTmAcc.token);
                 }
@@ -177,7 +212,7 @@ export class PixwithAutomation {
 
             if (!code) throw new Error('❌ لم يصل رمز التحقق.');
 
-            logger.log(`✅ الرمز: ${code}`, LogLevel.SUCCESS);
+            logger.log(`✅ الرمز المستخرج: ${code}`, LogLevel.SUCCESS);
 
             // Enter Code
             logger.log(`[7/8] إدخال الرمز...`, LogLevel.INFO);
@@ -189,18 +224,21 @@ export class PixwithAutomation {
             }
 
             await page.keyboard.press('Enter');
+            logger.log(`بانتظار اتمام التسجيل...`, LogLevel.INFO);
             await new Promise(resolve => setTimeout(resolve, 10000));
-            await this.takeAndEmitScreenshot(page);
+            await this.takeAndEmitScreenshot(page, 'Final Result');
 
-            logger.log(`✅ تم إكمال العملية!`, LogLevel.SUCCESS);
+            logger.log(`✅ تم إكمال الدورة!`, LogLevel.SUCCESS);
             this.saveAccount(email, 'Password123!');
 
             return true;
         } catch (error: any) {
-            logger.log(`❌ فشل: ${error.message}`, LogLevel.ERROR);
+            logger.log(`❌ فشل في الأتمتة: ${error.message}`, LogLevel.ERROR);
             if (browser) {
-                const pages = await browser.pages();
-                if (pages.length > 0) await this.takeAndEmitScreenshot(pages[0]);
+                try {
+                    const pages = await browser.pages();
+                    if (pages.length > 0) await this.takeAndEmitScreenshot(pages[0], 'Error State');
+                } catch (e) {}
             }
             return false;
         } finally {

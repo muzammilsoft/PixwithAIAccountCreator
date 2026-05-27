@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { PixwithAutomation } from './automation/PixwithAutomation';
+import { PixwithAutomation, MailProvider } from './automation/PixwithAutomation';
 import { ProxyManager } from './utils/ProxyManager';
 
 const program = new Command();
@@ -14,26 +14,31 @@ program
   .option('-c, --count <number>', 'Number of accounts to create', '10')
   .option('-p, --proxies <list>', 'Comma separated list of proxies (host:port:user:pass)', '')
   .option('-k, --captcha <key>', '2Captcha API Key', '')
-  .option('-y, --yopmail', 'Use Yopmail instead of Mail.tm', false)
+  .option('-m, --mail <provider>', 'Mail provider (mailtm, yopmail, onesecmail)', 'mailtm')
   .action(async (options) => {
-    const { referral, count, proxies, captcha, yopmail } = options;
+    const { referral, count, proxies, captcha, mail } = options;
     const numCount = parseInt(count);
     const proxyList = proxies ? proxies.split(',').map((p: string) => {
-        const [host, port, username, password] = p.split(':');
-        return { host, port, username, password };
+        const parts = p.split(':');
+        return {
+            host: parts[0],
+            port: parts[1],
+            username: parts[2],
+            password: parts[3]
+        };
     }) : [];
 
     const automation = new PixwithAutomation(captcha);
     const proxyManager = new ProxyManager(proxyList);
 
     console.log(`🚀 Starting bot... Target: ${numCount} accounts.`);
-    if (yopmail) console.log(`📧 Using Yopmail service.`);
+    console.log(`📧 Using Mail Provider: ${mail}`);
 
     let successCount = 0;
     for (let i = 0; i < numCount; i++) {
         console.log(`\n[Account ${i + 1}/${numCount}] Starting...`);
         const proxy = proxyManager.getNextProxy();
-        const success = await automation.createAccount(referral, proxy, yopmail);
+        const success = await automation.createAccount(referral, proxy, mail as MailProvider);
 
         if (success) {
             successCount++;
