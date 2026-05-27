@@ -38,9 +38,9 @@ export class OneSecMailService {
             const messageDetail = await axios.get(`${this.baseUrl}?action=readMessage&login=${login}&domain=${domain}&id=${messageId}`, { headers: this.headers });
 
             const body = messageDetail.data.textBody || messageDetail.data.body || messageDetail.data.htmlBody || '';
-            const codeMatch = body.match(/[A-Z0-9]{6}/);
+            const codeMatch = body.match(/\b([A-Z0-9]{6})\b/);
 
-            return codeMatch ? codeMatch[0] : null;
+            return codeMatch ? codeMatch[1] : null;
         } catch (error: any) {
             logger.log(`Error checking 1secmail: ${error.message}`, LogLevel.ERROR);
             return null;

@@ -2,6 +2,7 @@ import puppeteer, { Browser, Page } from 'puppeteer-core';
 import { MailTmService, MailAccount } from '../services/MailService';
 import { YopmailService } from '../services/YopmailService';
 import { OneSecMailService } from '../services/OneSecMailService';
+import { MoaktService } from '../services/MoaktService';
 import { ProxyConfig } from '../utils/ProxyManager';
 import { logger, LogLevel } from '../utils/AppLogger';
 import { CaptchaService } from '../services/CaptchaService';
@@ -13,13 +14,15 @@ import { execSync } from 'child_process';
 export enum MailProvider {
     MAIL_TM = 'mailtm',
     YOPMAIL = 'yopmail',
-    ONESECMAIL = 'onesecmail'
+    ONESECMAIL = 'onesecmail',
+    MOAKT = 'moakt'
 }
 
 export class PixwithAutomation {
     private mailTmService: MailTmService;
     private yopmailService: YopmailService;
     private oneSecMailService: OneSecMailService;
+    private moaktService: MoaktService;
     private captchaService?: CaptchaService;
     private accountsPath = path.join(process.cwd(), 'data', 'accounts.json');
 
@@ -30,6 +33,7 @@ export class PixwithAutomation {
         this.mailTmService = new MailTmService();
         this.yopmailService = new YopmailService(this.captchaService);
         this.oneSecMailService = new OneSecMailService();
+        this.moaktService = new MoaktService();
     }
 
     private findChromePath(): string {
@@ -93,26 +97,6 @@ export class PixwithAutomation {
         try {
             logger.log(`--- بدء دورة عمل جديدة (Puppeteer) ---`, LogLevel.INFO);
 
-            let email: string;
-            let mailTmAcc: MailAccount | null = null;
-
-            try {
-                if (provider === MailProvider.YOPMAIL) {
-                    logger.log(`[1/8] توليد بريد Yopmail...`, LogLevel.INFO);
-                    email = await this.yopmailService.generateEmail();
-                } else if (provider === MailProvider.ONESECMAIL) {
-                    logger.log(`[1/8] توليد بريد 1secMail...`, LogLevel.INFO);
-                    email = await this.oneSecMailService.generateEmail();
-                } else {
-                    logger.log(`[1/8] جاري طلب بريد مؤقت من Mail.tm...`, LogLevel.INFO);
-                    mailTmAcc = await this.mailTmService.generateEmail();
-                    email = mailTmAcc.address;
-                }
-            } catch (e: any) {
-                throw new Error(`فشل توليد البريد الإلكتروني (${provider}): ${e.message}`);
-            }
-            logger.log(`✅ البريد المستخدم: ${email}`, LogLevel.SUCCESS);
-
             const executablePath = this.findChromePath();
             const args = ['--no-sandbox', '--disable-setuid-sandbox'];
             if (proxy) args.push(`--proxy-server=${proxy.host}:${proxy.port}`);
@@ -123,6 +107,28 @@ export class PixwithAutomation {
                 args
             });
 
+            let email: string;
+            let mailTmAcc: MailAccount | null = null;
+
+            try {
+                if (provider === MailProvider.YOPMAIL) {
+                    logger.log(`[1/8] توليد بريد Yopmail...`, LogLevel.INFO);
+                    email = await this.yopmailService.generateEmail();
+                } else if (provider === MailProvider.ONESECMAIL) {
+                    logger.log(`[1/8] توليد بريد 1secMail...`, LogLevel.INFO);
+                    email = await this.oneSecMailService.generateEmail();
+                } else if (provider === MailProvider.MOAKT) {
+                    logger.log(`[1/8] توليد بريد Moakt...`, LogLevel.INFO);
+                    email = await this.moaktService.generateEmail(browser);
+                } else {
+                    logger.log(`[1/8] جاري طلب بريد مؤقت من Mail.tm...`, LogLevel.INFO);
+                    mailTmAcc = await this.mailTmService.generateEmail();
+                    email = mailTmAcc.address;
+                }
+            } catch (e: any) {
+                throw new Error(`فشل توليد البريد الإلكتروني (${provider}): ${e.message}`);
+            }
+            logger.log(`✅ البريد المستخدم: ${email}`, LogLevel.SUCCESS);
             const page = await browser.newPage();
             if (proxy && proxy.username && proxy.password) {
                 await page.authenticate({ username: proxy.username, password: proxy.password });
@@ -207,6 +213,8 @@ export class PixwithAutomation {
                     code = await this.yopmailService.getVerificationCode(browser, email);
                 } else if (provider === MailProvider.ONESECMAIL) {
                     code = await this.oneSecMailService.getVerificationCode(email);
+                } else if (provider === MailProvider.MOAKT) {
+                    code = await this.moaktService.getVerificationCode(browser, email);
                 } else if (mailTmAcc) {
                     code = await this.mailTmService.getVerificationCode(mailTmAcc.token);
                 }
@@ -220,11 +228,11 @@ export class PixwithAutomation {
 
             // Enter Code
             logger.log(`[7/8] إدخال الرمز...`, LogLevel.INFO);
-            const codeInput = await page.$('input[placeholder*="Code"], input[name*="code"], input[maxlength="6"]');
+            const codeInput = await page.$('input[placeholder*="Code"], input[placeholder*="رمز"], input[name*="code"], input[maxlength="6"]');
             if (codeInput) {
-                await codeInput.type(code);
+                await codeInput.type(code, { delay: 100 });
             } else {
-                await page.keyboard.type(code);
+                await page.keyboard.type(code, { delay: 100 });
             }
 
             await page.keyboard.press('Enter');

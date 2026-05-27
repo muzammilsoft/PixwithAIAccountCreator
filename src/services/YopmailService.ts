@@ -58,8 +58,8 @@ export class YopmailService {
                     const contentFrame = iframes.find(f => f.name() === 'ifmail');
                     if (contentFrame) {
                         const body = await contentFrame.evaluate(() => document.body.innerText);
-                        const codeMatch = body.match(/[A-Z0-9]{6}/);
-                        return codeMatch ? codeMatch[0] : null;
+                        const codeMatch = body.match(/\b([A-Z0-9]{6})\b/);
+                        return codeMatch ? codeMatch[1] : null;
                     }
                 }
             }

@@ -60,9 +60,9 @@ export class MailTmService implements IMailService {
             });
 
             const body = messageDetail.data.text || messageDetail.data.intro || messageDetail.data.html[0] || '';
-            const codeMatch = body.match(/[A-Z0-9]{6}/);
+            const codeMatch = body.match(/\b([A-Z0-9]{6})\b/);
 
-            return codeMatch ? codeMatch[0] : null;
+            return codeMatch ? codeMatch[1] : null;
         } catch (e) {
             return null;
         }
