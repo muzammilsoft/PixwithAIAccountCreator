@@ -22,7 +22,7 @@ program
         const parts = p.split(':');
         return {
             host: parts[0],
-            port: parts[1],
+            port: parseInt(parts[1]),
             username: parts[2],
             password: parts[3]
         };

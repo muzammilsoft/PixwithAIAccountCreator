@@ -96,16 +96,20 @@ export class PixwithAutomation {
             let email: string;
             let mailTmAcc: MailAccount | null = null;
 
-            if (provider === MailProvider.YOPMAIL) {
-                logger.log(`[1/8] توليد بريد Yopmail...`, LogLevel.INFO);
-                email = await this.yopmailService.generateEmail();
-            } else if (provider === MailProvider.ONESECMAIL) {
-                logger.log(`[1/8] توليد بريد 1secMail...`, LogLevel.INFO);
-                email = await this.oneSecMailService.generateEmail();
-            } else {
-                logger.log(`[1/8] جاري طلب بريد مؤقت من Mail.tm...`, LogLevel.INFO);
-                mailTmAcc = await this.mailTmService.generateEmail();
-                email = mailTmAcc.address;
+            try {
+                if (provider === MailProvider.YOPMAIL) {
+                    logger.log(`[1/8] توليد بريد Yopmail...`, LogLevel.INFO);
+                    email = await this.yopmailService.generateEmail();
+                } else if (provider === MailProvider.ONESECMAIL) {
+                    logger.log(`[1/8] توليد بريد 1secMail...`, LogLevel.INFO);
+                    email = await this.oneSecMailService.generateEmail();
+                } else {
+                    logger.log(`[1/8] جاري طلب بريد مؤقت من Mail.tm...`, LogLevel.INFO);
+                    mailTmAcc = await this.mailTmService.generateEmail();
+                    email = mailTmAcc.address;
+                }
+            } catch (e: any) {
+                throw new Error(`فشل توليد البريد الإلكتروني (${provider}): ${e.message}`);
             }
             logger.log(`✅ البريد المستخدم: ${email}`, LogLevel.SUCCESS);
 
