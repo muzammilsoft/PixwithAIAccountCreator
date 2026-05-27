@@ -176,17 +176,18 @@ export class PixwithAutomation {
 
             // Enter Email
             logger.log(`[5/8] إدخال البريد: ${email}`, LogLevel.INFO);
-            await page.waitForSelector('input[type="email"]', { timeout: 15000 });
-            await page.type('input[type="email"]', email, { delay: 100 });
+            await page.waitForSelector('input#email', { timeout: 15000 });
+            await page.type('input#email', email, { delay: 100 });
 
             await this.takeAndEmitScreenshot(page, 'Email Entered');
 
             logger.log(`طلب رمز التحقق...`, LogLevel.INFO);
+            const sendBtnSelector = 'button.bg-gradient-to-r'; // Based on screenshot of the purple button
             const sendBtnClicked = await page.evaluate(() => {
                 const buttons = Array.from(document.querySelectorAll('button'));
                 const sendBtn = buttons.find(b => {
                     const txt = b.textContent || '';
-                    return txt.includes('Send') || txt.includes('Verification Code') || txt.includes('رمز') || txt.includes('إرسال');
+                    return txt.includes('Sign In') || txt.includes('Sign Up') || txt.includes('Send') || txt.includes('Verification Code') || txt.includes('رمز') || txt.includes('إرسال');
                 }) as HTMLElement;
                 if (sendBtn) {
                     sendBtn.click();
@@ -228,14 +229,18 @@ export class PixwithAutomation {
 
             // Enter Code
             logger.log(`[7/8] إدخال الرمز...`, LogLevel.INFO);
-            const codeInput = await page.$('input[placeholder*="Code"], input[placeholder*="رمز"], input[name*="code"], input[maxlength="6"]');
-            if (codeInput) {
-                await codeInput.type(code, { delay: 100 });
-            } else {
-                await page.keyboard.type(code, { delay: 100 });
-            }
+            await page.waitForSelector('input#verificationCode', { timeout: 15000 });
+            await page.type('input#verificationCode', code, { delay: 100 });
 
-            await page.keyboard.press('Enter');
+            // Click the button again to submit the code
+            await page.evaluate(() => {
+                const buttons = Array.from(document.querySelectorAll('button'));
+                const submitBtn = buttons.find(b => {
+                    const txt = b.textContent || '';
+                    return txt.includes('Sign In') || txt.includes('Sign Up') || txt.includes('Submit');
+                }) as HTMLElement;
+                if (submitBtn) submitBtn.click();
+            });
             logger.log(`بانتظار اتمام التسجيل...`, LogLevel.INFO);
             await new Promise(resolve => setTimeout(resolve, 10000));
             await this.takeAndEmitScreenshot(page, 'Final Result');
