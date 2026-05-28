@@ -46,40 +46,55 @@ export class MoaktService {
         try {
             const [name, domain] = email.split('@');
             await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-            // Moakt direct link to inbox usually follows a pattern or uses session
-            // We'll go to the main page and it should remember the session if same browser instance
-            await page.goto('https://www.moakt.com/en/inbox', { waitUntil: 'networkidle2' });
 
-            // Refresh button
-            const refreshBtn = await page.$('#refresh_inbox, .btn-refresh');
-            if (refreshBtn) await refreshBtn.click();
+            // Go to inbox directly
+            await page.goto('https://www.moakt.com/en/inbox', { waitUntil: 'networkidle2', timeout: 30000 });
 
-            await new Promise(resolve => setTimeout(resolve, 3000));
+            // Look for refresh and click it
+            const refreshBtn = await page.$('#refresh_inbox, .btn-refresh, input[value="Refresh"]');
+            if (refreshBtn) {
+                await refreshBtn.click();
+                await new Promise(resolve => setTimeout(resolve, 3000));
+            }
 
-            // Look for messages from Pixwith
-            const hasMessages = await page.evaluate(() => {
+            // Check if any emails exist
+            const emailFound = await page.evaluate(() => {
                 const rows = Array.from(document.querySelectorAll('table#emails-list tbody tr'));
-                return rows.length > 0 && !rows[0].textContent?.includes('No emails');
+                // Find a row that doesn't say "No emails"
+                const validRow = rows.find(r => r.textContent && !r.textContent.includes('No emails'));
+                if (validRow) {
+                    const link = validRow.querySelector('a');
+                    if (link) {
+                        link.click();
+                        return true;
+                    }
+                }
+                return false;
             });
 
-            if (!hasMessages) return null;
+            if (!emailFound) return null;
 
-            // Click the first message
-            await page.evaluate(() => {
-                const firstRow = document.querySelector('table#emails-list tbody tr td a');
-                if (firstRow) (firstRow as HTMLElement).click();
+            // Wait for message content to load
+            await page.waitForSelector('#email_content, .msg_body', { timeout: 10000 }).catch(() => {});
+            await new Promise(resolve => setTimeout(resolve, 2000));
+
+            // Extract code
+            const result = await page.evaluate(() => {
+                const content = document.querySelector('#email_content')?.textContent ||
+                               document.querySelector('.msg_body')?.textContent ||
+                               document.body.innerText;
+
+                const match = content.match(/\b([A-Z0-9]{6})\b/);
+                return match ? match[1] : null;
             });
 
-            await new Promise(resolve => setTimeout(resolve, 3000));
+            if (result) {
+                logger.log(`✅ تم العثور على الكود في Moakt: ${result}`, LogLevel.SUCCESS);
+            } else {
+                logger.log(`⚠️ تم فتح الرسالة في Moakt ولكن لم يتم العثور على نمط الكود (6 رموز).`, LogLevel.WARNING);
+            }
 
-            // Get content
-            const body = await page.evaluate(() => {
-                const content = document.querySelector('#email_content') || document.body;
-                return content.textContent || '';
-            });
-
-            const codeMatch = body.match(/\b([A-Z0-9]{6})\b/);
-            return codeMatch ? codeMatch[1] : null;
+            return result;
         } catch (e: any) {
             logger.log(`Error reading Moakt: ${e.message}`, LogLevel.ERROR);
             return null;

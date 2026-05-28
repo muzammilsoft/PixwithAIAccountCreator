@@ -205,10 +205,10 @@ export class PixwithAutomation {
             await this.takeAndEmitScreenshot(page, 'After Code Request');
 
             // Polling Code
-            logger.log(`[6/8] انتظار الكود...`, LogLevel.INFO);
+            logger.log(`[6/8] انتظار الكود (المهلة 3 دقائق)...`, LogLevel.INFO);
             let code: string | null = null;
-            for (let i = 1; i <= 30; i++) {
-                logger.log(`فحص البريد محاولة ${i}/30`, LogLevel.INFO);
+            for (let i = 1; i <= 36; i++) {
+                logger.log(`فحص البريد محاولة ${i}/36`, LogLevel.INFO);
                 if (provider === MailProvider.YOPMAIL) {
                     code = await this.yopmailService.getVerificationCode(browser, email);
                 } else if (provider === MailProvider.ONESECMAIL) {
