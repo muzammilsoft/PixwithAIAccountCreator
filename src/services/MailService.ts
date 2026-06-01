@@ -60,7 +60,8 @@ export class MailTmService implements IMailService {
             });
 
             const body = messageDetail.data.text || messageDetail.data.intro || messageDetail.data.html[0] || '';
-            const codeMatch = body.match(/\b([A-Z0-9]{6})\b/);
+            // Pixwith code is usually 6 digits
+            const codeMatch = body.match(/\b(\d{6})\b/);
 
             return codeMatch ? codeMatch[1] : null;
         } catch (e) {
