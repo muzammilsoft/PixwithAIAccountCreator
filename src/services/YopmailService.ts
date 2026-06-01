@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Browser, Page } from 'puppeteer-core';
+import { Browser, Page } from 'puppeteer';
 import { CaptchaService } from './CaptchaService';
 import { logger, LogLevel } from '../utils/AppLogger';
 

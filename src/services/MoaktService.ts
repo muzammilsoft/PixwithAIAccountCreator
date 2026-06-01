@@ -1,4 +1,4 @@
-import { Browser, Page } from 'puppeteer-core';
+import { Browser, Page } from 'puppeteer';
 import { logger, LogLevel } from '../utils/AppLogger';
 
 export class MoaktService {
@@ -8,20 +8,25 @@ export class MoaktService {
             await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
             await page.goto('https://www.moakt.com/en', { waitUntil: 'networkidle2' });
 
-            // Click "Get a random address" or similar
-            const getBtn = await page.$('input[value="Get a random address"], #random_email, .btn-random');
-            if (getBtn) {
-                await getBtn.click();
-            } else {
-                // Fallback attempt to click any button that looks like "Random"
-                await page.evaluate(() => {
-                    const buttons = Array.from(document.querySelectorAll('input, button, a'));
-                    const target = buttons.find(b => {
-                        const txt = (b as any).value || b.textContent || '';
-                        return txt.toLowerCase().includes('random');
-                    }) as HTMLElement;
-                    if (target) target.click();
-                });
+            // Click "Get a random address"
+            const clicked = await page.evaluate(() => {
+                const buttons = Array.from(document.querySelectorAll('input, button, a'));
+                const target = buttons.find(b => {
+                    const val = (b as any).value || '';
+                    const txt = b.textContent || '';
+                    return val.toLowerCase().includes('random') || txt.toLowerCase().includes('random');
+                }) as HTMLElement;
+                if (target) {
+                    target.click();
+                    return true;
+                }
+                return false;
+            });
+
+            if (!clicked) {
+                // Try direct button if evaluate failed
+                const randomBtn = await page.$('input[value*="random"], #random_email');
+                if (randomBtn) await randomBtn.click();
             }
 
             await page.waitForSelector('#email-address', { timeout: 15000 });
@@ -44,57 +49,80 @@ export class MoaktService {
     async getVerificationCode(browser: Browser, email: string): Promise<string | null> {
         const page = await browser.newPage();
         try {
-            const [name, domain] = email.split('@');
             await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
-            // Go to inbox directly
+            // Go to inbox
             await page.goto('https://www.moakt.com/en/inbox', { waitUntil: 'networkidle2', timeout: 30000 });
 
-            // Look for refresh and click it
-            const refreshBtn = await page.$('#refresh_inbox, .btn-refresh, input[value="Refresh"]');
+            // Click refresh
+            const refreshBtn = await page.$('#refresh_inbox');
             if (refreshBtn) {
                 await refreshBtn.click();
                 await new Promise(resolve => setTimeout(resolve, 3000));
             }
 
-            // Check if any emails exist
-            const emailFound = await page.evaluate(() => {
+            // Check for emails from Pixwith or with "code" in subject
+            const emailLink = await page.evaluate(() => {
                 const rows = Array.from(document.querySelectorAll('table#emails-list tbody tr'));
-                // Find a row that doesn't say "No emails"
-                const validRow = rows.find(r => r.textContent && !r.textContent.includes('No emails'));
-                if (validRow) {
-                    const link = validRow.querySelector('a');
-                    if (link) {
-                        link.click();
-                        return true;
+                for (const row of rows) {
+                    const text = row.textContent?.toLowerCase() || '';
+                    // Exclude the "No messages" row
+                    if (text.includes('no messages') || text.includes('no emails')) continue;
+
+                    const sender = row.querySelector('td:nth-child(2)')?.textContent?.toLowerCase() || '';
+                    const subject = row.querySelector('td:nth-child(1)')?.textContent?.toLowerCase() || '';
+
+                    if (sender.includes('pixwith') || subject.includes('code') || subject.includes('verification')) {
+                        const link = row.querySelector('a[href*="/email/"]');
+                        if (link) return (link as HTMLAnchorElement).href;
                     }
                 }
-                return false;
+                return null;
             });
 
-            if (!emailFound) return null;
+            if (!emailLink) return null;
 
-            // Wait for message content to load
-            await page.waitForSelector('#email_content, .msg_body', { timeout: 10000 }).catch(() => {});
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            logger.log(`📧 تم العثور على رسالة، جاري فتحها: ${emailLink}`, LogLevel.INFO);
+            await page.goto(emailLink, { waitUntil: 'networkidle2' });
 
-            // Extract code
-            const result = await page.evaluate(() => {
-                const content = document.querySelector('#email_content')?.textContent ||
-                               document.querySelector('.msg_body')?.textContent ||
-                               document.body.innerText;
+            // Wait for content
+            await new Promise(resolve => setTimeout(resolve, 3000));
 
-                const match = content.match(/\b([A-Z0-9]{6})\b/);
-                return match ? match[1] : null;
+            // Extract code from msg_body iframe or direct text
+            const code = await page.evaluate(() => {
+                // Try to find code in the whole body first
+                const bodyText = document.body.innerText;
+
+                // If there's an iframe for the message body
+                const iframe = document.querySelector('#msg_body') as HTMLIFrameElement;
+                let content = bodyText;
+                if (iframe) {
+                    try {
+                        const doc = iframe.contentDocument || iframe.contentWindow?.document;
+                        if (doc && doc.body) content += " " + doc.body.innerText;
+                    } catch (e) {}
+                }
+
+                // Pixwith specific: sometimes the code is in a bold or large text
+                // Let's use a more robust regex that prioritizes the 6-digit alphanumeric code
+                // We exclude common words that might be 6 chars like 'PIXWITH'
+                const matches = content.match(/\b([A-Z0-9]{6})\b/g);
+                if (matches) {
+                    // Find the one that is likely the code (often the one with more numbers or at the end)
+                    const filtered = matches.filter(m => m !== 'PIXWITH' && m !== 'SIGNUP' && m !== 'VERIFY');
+                    return filtered.length > 0 ? filtered[filtered.length - 1] : matches[0];
+                }
+                return null;
             });
 
-            if (result) {
-                logger.log(`✅ تم العثور على الكود في Moakt: ${result}`, LogLevel.SUCCESS);
+            if (code) {
+                logger.log(`✅ تم استخراج الكود بنجاح: ${code}`, LogLevel.SUCCESS);
+                return code;
             } else {
-                logger.log(`⚠️ تم فتح الرسالة في Moakt ولكن لم يتم العثور على نمط الكود (6 رموز).`, LogLevel.WARNING);
+                logger.log(`⚠️ لم يتم العثور على الكود داخل الرسالة.`, LogLevel.WARNING);
+                // Log partial content for debugging if needed (limited)
+                return null;
             }
-
-            return result;
         } catch (e: any) {
             logger.log(`Error reading Moakt: ${e.message}`, LogLevel.ERROR);
             return null;

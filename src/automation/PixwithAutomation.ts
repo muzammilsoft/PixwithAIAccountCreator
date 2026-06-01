@@ -1,10 +1,15 @@
-import puppeteer, { Browser, Page } from 'puppeteer-core';
+import puppeteer from 'puppeteer-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+import { Browser, Page } from 'puppeteer';
 import { MailTmService, MailAccount } from '../services/MailService';
+
+puppeteer.use(StealthPlugin());
 import { YopmailService } from '../services/YopmailService';
 import { OneSecMailService } from '../services/OneSecMailService';
 import { MoaktService } from '../services/MoaktService';
 import { ProxyConfig } from '../utils/ProxyManager';
 import { logger, LogLevel } from '../utils/AppLogger';
+import { config } from '../utils/Config';
 import { CaptchaService } from '../services/CaptchaService';
 import { uploadScreenshot } from '../utils/ScreenshotUploader';
 import fs from 'fs';
@@ -79,6 +84,11 @@ export class PixwithAutomation {
         try {
             logger.log(`📸 جاري محاولة التقاط لقطة شاشة: ${label}`, LogLevel.INFO);
             const buffer = await page.screenshot({ fullPage: true }) as Buffer;
+
+            // Save locally for debugging
+            const filename = `debug_${label.replace(/\s+/g, '_').toLowerCase()}.png`;
+            fs.writeFileSync(filename, buffer);
+
             const base64 = buffer.toString('base64');
             const publicUrl = await uploadScreenshot(buffer);
             logger.sendScreenshot(base64, publicUrl || undefined);
@@ -103,7 +113,7 @@ export class PixwithAutomation {
 
             browser = await puppeteer.launch({
                 executablePath,
-                headless: true,
+                headless: config.headless,
                 args
             });
 
@@ -119,6 +129,7 @@ export class PixwithAutomation {
                     email = await this.oneSecMailService.generateEmail();
                 } else if (provider === MailProvider.MOAKT) {
                     logger.log(`[1/8] توليد بريد Moakt...`, LogLevel.INFO);
+                if (!browser) throw new Error('Browser not initialized');
                     email = await this.moaktService.generateEmail(browser);
                 } else {
                     logger.log(`[1/8] جاري طلب بريد مؤقت من Mail.tm...`, LogLevel.INFO);
@@ -151,54 +162,115 @@ export class PixwithAutomation {
 
             await this.takeAndEmitScreenshot(page, 'Landing Page');
 
-            // Click Sign In
-            logger.log(`[4/8] محاولة التسجيل...`, LogLevel.INFO);
+            // Click Sign In / Start for Free to trigger modal
+            logger.log(`[4/8] محاولة فتح نافذة التسجيل...`, LogLevel.INFO);
             const clicked = await page.evaluate(() => {
-                const buttons = Array.from(document.querySelectorAll('button, a'));
-                const target = buttons.find(b => {
-                    const txt = b.textContent?.toLowerCase() || '';
-                    return txt.includes('sign in') || txt.includes('start for free') || txt.includes('ابدأ') || txt.includes('سجل');
+                const isButton = (el: Element) => {
+                    const tag = el.tagName.toLowerCase();
+                    return tag === 'button' || tag === 'a' || el.getAttribute('role') === 'button' || el.classList.contains('mantine-Button-root');
+                };
+
+                const elements = Array.from(document.querySelectorAll('button, a, span, div, .mantine-Button-root'));
+
+                // Try specific text matches first
+                const target = elements.find(b => {
+                    const txt = b.textContent?.toLowerCase().trim() || '';
+                    return (txt === 'sign in' || txt === 'start for free' || txt === 'ابدأ مجاناً' || txt === 'تسجيل الدخول' || txt === 'get started' || txt === 'sign in / sign up');
                 }) as HTMLElement;
+
                 if (target) {
                     target.click();
                     return true;
                 }
+
+                // Fallback to broader match
+                const fallback = elements.find(b => {
+                    if (!isButton(b)) return false;
+                    const txt = b.textContent?.toLowerCase() || '';
+                    return txt.includes('sign') || txt.includes('start') || txt.includes('ابدأ');
+                }) as HTMLElement;
+
+                if (fallback) {
+                    fallback.click();
+                    return true;
+                }
+
                 return false;
             });
 
             if (!clicked) {
-                logger.log('⚠️ لم يتم العثور على زر التسجيل، محاولة الانتقال المباشر...', LogLevel.WARNING);
-                await page.goto('https://pixwith.ai/signup', { waitUntil: 'networkidle2' });
+                logger.log('⚠️ لم يتم العثور على زر فتح النافذة، محاولة التوجه المباشر لرابط التسجيل.', LogLevel.WARNING);
+                await page.goto('https://pixwith.ai/signin', { waitUntil: 'networkidle2' }).catch(() => {});
             }
 
-            await new Promise(resolve => setTimeout(resolve, 5000));
-            await this.takeAndEmitScreenshot(page, 'Sign Up Page');
+            // Wait for modal and email input
+            try {
+                await page.waitForSelector('input[type="email"]', { timeout: 10000 });
+                logger.log('✅ ظهرت نافذة التسجيل.', LogLevel.SUCCESS);
+            } catch (e) {
+                logger.log('⚠️ لم تظهر نافذة التسجيل بعد الضغط، محاولة الانتقال المباشر...', LogLevel.WARNING);
+                await page.goto('https://pixwith.ai/signup', { waitUntil: 'networkidle2' });
+                await page.waitForSelector('input[type="email"]', { timeout: 10000 }).catch(() => {});
+            }
+
+            await this.takeAndEmitScreenshot(page, 'Sign Up Modal');
 
             // Enter Email
             logger.log(`[5/8] إدخال البريد: ${email}`, LogLevel.INFO);
-            await page.waitForSelector('input[type="email"]', { timeout: 15000 });
-            await page.type('input[type="email"]', email, { delay: 100 });
+            const emailInput = await page.$('input[type="email"]');
+            if (!emailInput) throw new Error('لم يتم العثور على حقل البريد الإلكتروني');
+
+            await emailInput.click({ clickCount: 3 });
+            await emailInput.press('Backspace');
+            await emailInput.type(email, { delay: 50 });
 
             await this.takeAndEmitScreenshot(page, 'Email Entered');
 
             logger.log(`طلب رمز التحقق...`, LogLevel.INFO);
-            const sendBtnClicked = await page.evaluate(() => {
-                const buttons = Array.from(document.querySelectorAll('button'));
-                const sendBtn = buttons.find(b => {
-                    const txt = b.textContent || '';
-                    return txt.includes('Send') || txt.includes('Verification Code') || txt.includes('رمز') || txt.includes('إرسال');
+            const sendBtnStatus = await page.evaluate(() => {
+                const isButtonElement = (el: Element) => {
+                    const tagName = el.tagName.toLowerCase();
+                    const role = el.getAttribute('role');
+                    const className = el.className || '';
+                    return tagName === 'button' || role === 'button' || className.includes('Button');
+                };
+
+                const elements = Array.from(document.querySelectorAll('button, [role="button"], .mantine-Button-root, a, span, div'));
+
+                // Priority 1: Exact matches on actual buttons
+                const exactBtn = elements.find(b => {
+                    if (!isButtonElement(b)) return false;
+                    const txt = b.textContent?.trim().toLowerCase() || '';
+                    return txt === 'send code' || txt === 'sign in / sign up' || txt === 'continue' || txt === 'إرسال الرمز' || txt === 'متابعة';
                 }) as HTMLElement;
-                if (sendBtn) {
-                    sendBtn.click();
-                    return true;
+
+                if (exactBtn) {
+                    exactBtn.scrollIntoView();
+                    exactBtn.click();
+                    return { found: true, type: 'exact', text: exactBtn.textContent?.trim() };
                 }
-                return false;
+
+                // Priority 2: Partial matches on button-like elements
+                const partialBtn = elements.find(b => {
+                    if (!isButtonElement(b)) return false;
+                    const txt = b.textContent?.trim().toLowerCase() || '';
+                    return (txt.includes('send') || txt.includes('sign in') || txt.includes('sign up') || txt.includes('continue')) && !txt.includes('terms of service');
+                }) as HTMLElement;
+
+                if (partialBtn) {
+                    partialBtn.scrollIntoView();
+                    partialBtn.click();
+                    return { found: true, type: 'partial', text: partialBtn.textContent?.trim() };
+                }
+
+                return { found: false };
             });
 
-            if (!sendBtnClicked) {
-                logger.log('❌ فشل الضغط على زر إرسال الرمز.', LogLevel.ERROR);
+            if (!sendBtnStatus.found) {
+                logger.log(`❌ فشل العثور على زر إرسال الرمز.`, LogLevel.ERROR);
+                await this.takeAndEmitScreenshot(page, 'Send Button Not Found');
             } else {
-                logger.log('✅ تم الضغط على زر إرسال الرمز.', LogLevel.SUCCESS);
+                logger.log(`✅ تم الضغط على زر إرسال الرمز (${sendBtnStatus.text}).`, LogLevel.SUCCESS);
             }
 
             await new Promise(resolve => setTimeout(resolve, 5000));
@@ -210,10 +282,12 @@ export class PixwithAutomation {
             for (let i = 1; i <= 36; i++) {
                 logger.log(`فحص البريد محاولة ${i}/36`, LogLevel.INFO);
                 if (provider === MailProvider.YOPMAIL) {
+                    if (!browser) throw new Error('Browser not initialized');
                     code = await this.yopmailService.getVerificationCode(browser, email);
                 } else if (provider === MailProvider.ONESECMAIL) {
                     code = await this.oneSecMailService.getVerificationCode(email);
                 } else if (provider === MailProvider.MOAKT) {
+                    if (!browser) throw new Error('Browser not initialized');
                     code = await this.moaktService.getVerificationCode(browser, email);
                 } else if (mailTmAcc) {
                     code = await this.mailTmService.getVerificationCode(mailTmAcc.token);
@@ -228,13 +302,19 @@ export class PixwithAutomation {
 
             // Enter Code
             logger.log(`[7/8] إدخال الرمز...`, LogLevel.INFO);
-            const codeInput = await page.$('input[placeholder*="Code"], input[placeholder*="رمز"], input[name*="code"], input[maxlength="6"]');
+            // Pixwith uses a specific code input often split or with specific classes
+            const codeInput = await page.$('input[placeholder*="code" i], input[placeholder*="رمز" i], input[aria-label*="code" i], .mantine-Input-input');
             if (codeInput) {
-                await codeInput.type(code, { delay: 100 });
+                await codeInput.focus();
+                await codeInput.click({ clickCount: 3 });
+                await codeInput.press('Backspace');
+                await codeInput.type(code, { delay: 150 });
             } else {
-                await page.keyboard.type(code, { delay: 100 });
+                logger.log('⚠️ لم يتم العثور على حقل الكود، المحاولة عبر لوحة المفاتيح مباشرة.', LogLevel.WARNING);
+                await page.keyboard.type(code, { delay: 150 });
             }
 
+            await new Promise(resolve => setTimeout(resolve, 1000));
             await page.keyboard.press('Enter');
             logger.log(`بانتظار اتمام التسجيل...`, LogLevel.INFO);
             await new Promise(resolve => setTimeout(resolve, 10000));

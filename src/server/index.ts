@@ -38,6 +38,12 @@ io.on('connection', (socket) => {
 
                 if (!isRunning) break;
 
+                if (success) {
+                    logger.log(`✅ تمت العملية بنجاح!`, LogLevel.SUCCESS);
+                } else {
+                    logger.log(`❌ فشلت العملية، سيتم الانتقال للمحاولة التالية.`, LogLevel.ERROR);
+                }
+
                 logger.log(`الانتظار 10 ثوانٍ قبل المحاولة التالية...`, LogLevel.INFO);
                 await new Promise(resolve => setTimeout(resolve, 10000));
             }

@@ -37,5 +37,22 @@ export async function uploadScreenshot(buffer: Buffer): Promise<string | null> {
         console.error('file.io upload failed:', e.message);
     }
 
+    // Fallback: Pixeldrain
+    try {
+        const form = new FormData();
+        form.append('file', buffer, { filename: 'screenshot.png' });
+
+        const response = await axios.post('https://pixeldrain.com/api/file', form, {
+            headers: form.getHeaders(),
+            timeout: 20000
+        });
+
+        if (response.data && response.data.success) {
+            return `https://pixeldrain.com/api/file/${response.data.id}`;
+        }
+    } catch (e: any) {
+        console.error('Pixeldrain upload failed:', e.message);
+    }
+
     return null;
 }

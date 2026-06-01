@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { PixwithAutomation, MailProvider } from './automation/PixwithAutomation';
 import { ProxyManager } from './utils/ProxyManager';
+import { config } from './utils/Config';
 
 const program = new Command();
 
@@ -10,11 +11,11 @@ program
   .version('1.0.0');
 
 program
-  .requiredOption('-r, --referral <link>', 'Referral link for Pixwith.ai')
-  .option('-c, --count <number>', 'Number of accounts to create', '10')
-  .option('-p, --proxies <list>', 'Comma separated list of proxies (host:port:user:pass)', '')
-  .option('-k, --captcha <key>', '2Captcha API Key', '')
-  .option('-m, --mail <provider>', 'Mail provider (mailtm, yopmail, onesecmail)', 'mailtm')
+  .option('-r, --referral <link>', 'Referral link for Pixwith.ai', config.referralLink)
+  .option('-c, --count <number>', 'Number of accounts to create', config.accountCount.toString())
+  .option('-p, --proxies <list>', 'Comma separated list of proxies (host:port:user:pass)', config.proxies)
+  .option('-k, --captcha <key>', '2Captcha API Key', config.captchaKey)
+  .option('-m, --mail <provider>', 'Mail provider (mailtm, yopmail, onesecmail, moakt)', config.mailProvider)
   .action(async (options) => {
     const { referral, count, proxies, captcha, mail } = options;
     const numCount = parseInt(count);

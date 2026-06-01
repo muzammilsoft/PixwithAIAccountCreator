@@ -15,10 +15,11 @@ on:
         description: 'Mail Provider'
         type: choice
         options:
+          - moakt
           - onesecmail
           - mailtm
           - yopmail
-        default: onesecmail
+        default: moakt
 
 jobs:
   build-and-run:
