@@ -1,0 +1,28 @@
+
+> pixwith-account-creator@1.0.0 dev
+> nodemon --watch 'src/**/*.ts' --exec 'ts-node' src/server/index.ts
+
+[33m[nodemon] 3.1.14[39m
+[33m[nodemon] to restart at any time, enter `rs`[39m
+[33m[nodemon] watching path(s): src/**/*.ts[39m
+[33m[nodemon] watching extensions: ts,json[39m
+[32m[nodemon] starting `ts-node src/server/index.ts`[39m
+◇ injected env (0) from .env // tip: ⌘ suppress logs { quiet: true }
+Error: listen EADDRINUSE: address already in use :::3000
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at Object.<anonymous> (/app/src/server/index.ts:65:12)
+    at Module._compile (node:internal/modules/cjs/loader:1705:14)
+    at Module.m._compile (/app/node_modules/ts-node/src/index.ts:1618:23)
+    at node:internal/modules/cjs/loader:1838:10
+    at Object.require.extensions.<computed> [as .ts] (/app/node_modules/ts-node/src/index.ts:1621:12)
+    at Module.load (node:internal/modules/cjs/loader:1441:32)
+    at Function._load (node:internal/modules/cjs/loader:1263:12) {
+  code: 'EADDRINUSE',
+  errno: -98,
+  syscall: 'listen',
+  address: '::',
+  port: 3000
+}
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m

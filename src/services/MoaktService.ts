@@ -1,5 +1,6 @@
 import { Browser, Page } from 'puppeteer';
 import { logger, LogLevel } from '../utils/AppLogger';
+import fs from 'fs';
 
 export class MoaktService {
     async generateEmail(browser: Browser): Promise<string> {
@@ -62,27 +63,49 @@ export class MoaktService {
             }
 
             // Check for emails from Pixwith or with "code" in subject
-            const emailLink = await page.evaluate(() => {
-                const rows = Array.from(document.querySelectorAll('table#emails-list tbody tr'));
+            // Take screenshot of inbox for debugging
+            const inboxBuffer = await page.screenshot({ fullPage: true });
+            fs.writeFileSync(`debug_moakt_inbox_${Date.now()}.png`, inboxBuffer);
+
+            const emailData = await page.evaluate(() => {
+                const rows = Array.from(document.querySelectorAll('table tr'));
                 for (const row of rows) {
+                    const cells = Array.from(row.querySelectorAll('td'));
+                    if (cells.length < 2) continue;
+
                     const text = row.textContent?.toLowerCase() || '';
-                    // Exclude the "No messages" row
                     if (text.includes('no messages') || text.includes('no emails')) continue;
 
-                    const sender = row.querySelector('td:nth-child(2)')?.textContent?.toLowerCase() || '';
-                    const subject = row.querySelector('td:nth-child(1)')?.textContent?.toLowerCase() || '';
+                    const subject = cells[0].textContent || '';
+                    const sender = cells[1].textContent || '';
 
-                    if (sender.includes('pixwith') || subject.includes('code') || subject.includes('verification')) {
+                    if (sender.toLowerCase().includes('pixwith') || subject.toLowerCase().includes('code') || subject.toLowerCase().includes('verification')) {
                         const link = row.querySelector('a[href*="/email/"]');
-                        if (link) return (link as HTMLAnchorElement).href;
+
+                        // Extract code from subject if it's there
+                        const matches = subject.match(/\b([A-Z0-9]{6})\b/);
+                        const codeFromSubject = matches ? matches[1] : null;
+
+                        return {
+                            link: link ? (link as HTMLAnchorElement).href : null,
+                            codeFromSubject
+                        };
                     }
                 }
                 return null;
             });
 
-            if (!emailLink) return null;
+            if (!emailData) return null;
 
-            logger.log(`📧 تم العثور على رسالة، جاري فتحها: ${emailLink}`, LogLevel.INFO);
+            if (emailData.codeFromSubject) {
+                logger.log(`✅ تم استخراج الكود من عنوان الرسالة: ${emailData.codeFromSubject}`, LogLevel.SUCCESS);
+                return emailData.codeFromSubject;
+            }
+
+            if (!emailData.link) return null;
+
+            logger.log(`📧 تم العثور على رسالة، جاري فتحها: ${emailData.link}`, LogLevel.INFO);
+            const emailLink = emailData.link;
             await page.goto(emailLink, { waitUntil: 'networkidle2' });
 
             // Wait for content

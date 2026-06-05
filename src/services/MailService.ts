@@ -60,9 +60,13 @@ export class MailTmService implements IMailService {
             });
 
             const body = messageDetail.data.text || messageDetail.data.intro || messageDetail.data.html[0] || '';
-            const codeMatch = body.match(/\b([A-Z0-9]{6})\b/);
+            const matches = body.match(/\b([A-Z0-9]{6})\b/g);
 
-            return codeMatch ? codeMatch[1] : null;
+            if (matches) {
+                const filtered = matches.filter((m: string) => m !== 'PIXWITH' && m !== 'SIGNUP' && m !== 'VERIFY');
+                return filtered.length > 0 ? filtered[filtered.length - 1] : matches[0];
+            }
+            return null;
         } catch (e) {
             return null;
         }

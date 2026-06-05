@@ -160,6 +160,14 @@ export class PixwithAutomation {
                 logger.log('⚠️ تم اكتشاف Cloudflare Challenge، قد تفشل العملية.', LogLevel.WARNING);
             }
 
+            // Diagnostic: Check if referral was applied
+            const hasReferralCookie = (await page.cookies()).some(c => c.name.toLowerCase().includes('ref'));
+            if (hasReferralCookie) {
+                logger.log('✅ تم اكتشاف ملف تعريف الإحالة (Referral Cookie).', LogLevel.SUCCESS);
+            } else {
+                logger.log('ℹ️ لم يتم العثور على ملف تعريف الإحالة، قد يتم التسجيل بدون إحالة.', LogLevel.INFO);
+            }
+
             await this.takeAndEmitScreenshot(page, 'Landing Page');
 
             // Click Sign In / Start for Free to trigger modal
@@ -317,13 +325,27 @@ export class PixwithAutomation {
             await new Promise(resolve => setTimeout(resolve, 1000));
             await page.keyboard.press('Enter');
             logger.log(`بانتظار اتمام التسجيل...`, LogLevel.INFO);
-            await new Promise(resolve => setTimeout(resolve, 10000));
+            await new Promise(resolve => setTimeout(resolve, 15000));
+
+            // Check if login was successful (usually URL changes or a logout button appears)
+            const finalUrl = page.url();
+            const isLoggedIn = await page.evaluate(() => {
+                return document.body.innerText.toLowerCase().includes('sign out') ||
+                       document.body.innerText.toLowerCase().includes('تسجيل الخروج') ||
+                       window.location.pathname.includes('/dashboard') ||
+                       window.location.pathname.includes('/app');
+            });
+
             await this.takeAndEmitScreenshot(page, 'Final Result');
 
-            logger.log(`✅ تم إكمال الدورة!`, LogLevel.SUCCESS);
-            this.saveAccount(email, 'Password123!');
-
-            return true;
+            if (isLoggedIn || !finalUrl.includes('signin')) {
+                logger.log(`✅ تم إكمال الدورة والتسجيل بنجاح!`, LogLevel.SUCCESS);
+                this.saveAccount(email, 'Password123!');
+                return true;
+            } else {
+                logger.log(`⚠️ اكتملت الخطوات ولكن يبدو أن التسجيل لم يكتمل (URL: ${finalUrl})`, LogLevel.WARNING);
+                return false;
+            }
         } catch (error: any) {
             logger.log(`❌ فشل في الأتمتة: ${error.message}`, LogLevel.ERROR);
             if (browser) {
